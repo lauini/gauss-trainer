@@ -1,0 +1,936 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gauß-Trainer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: one working column like a worksheet on squared paper; task card on top, help and solution unfold below it. */
+:root {
+  --paper: #F4F6F5;
+  --surface: #FFFFFF;
+  --ink: #17283A;
+  --muted: #566573;
+  --line: #D5DCDF;
+  --grid: rgba(23, 40, 58, 0.055);
+  --accent: #0B6E6D;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DCEEEC;
+  --pen: #A6541A;
+  --good: #2D7A4B;
+  --good-soft: #E1F1E6;
+  --bad: #B0363A;
+  --bad-soft: #F8E3E2;
+  --hint-soft: #FFF4DF;
+  --hint-line: #E9C987;
+  --font-ui: "DM Sans", "Segoe UI", Arial, sans-serif;
+  --font-math: "STIX Two Text", "Cambria Math", "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10171D; --surface: #18222A; --ink: #E4EAEE; --muted: #9AA9B4; --line: #2C3A45;
+    --grid: rgba(228, 234, 238, 0.045); --accent: #4FBDB9; --accent-ink: #0B1A1A; --accent-soft: #173533;
+    --pen: #F0A35E; --good: #6CCB8F; --good-soft: #17301F; --bad: #F08A8A; --bad-soft: #3A1C1E;
+    --hint-soft: #2E2716; --hint-line: #6E5A2C; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #10171D; --surface: #18222A; --ink: #E4EAEE; --muted: #9AA9B4; --line: #2C3A45;
+  --grid: rgba(228, 234, 238, 0.045); --accent: #4FBDB9; --accent-ink: #0B1A1A; --accent-soft: #173533;
+  --pen: #F0A35E; --good: #6CCB8F; --good-soft: #17301F; --bad: #F08A8A; --bad-soft: #3A1C1E;
+  --hint-soft: #2E2716; --hint-line: #6E5A2C; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { padding-top: max(24px, env(safe-area-inset-top, 0px)); }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-size: 16px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 64px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+h1 { font-family: var(--font-math); font-weight: 600; font-size: clamp(30px, 5vw, 42px); line-height: 1.1; margin: 0; letter-spacing: -0.3px; }
+.sub { margin: 4px 0 0; color: var(--muted); }
+.stats { display: flex; gap: 8px; flex-wrap: wrap; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stat b { color: var(--ink); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; }
+.ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ctl-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 500; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; padding: 6px 14px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 500; }
+.seg button:focus-visible, .btn:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.card {
+  background-color: var(--surface);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border: 1px solid var(--line); border-radius: 14px; padding: clamp(18px, 3vw, 32px);
+  display: flex; flex-direction: column; gap: 22px; min-width: 0;
+}
+.task-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.task-title { font-weight: 700; font-size: 18px; }
+.chip { font-size: 13px; padding: 2px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+.prompt { margin: -10px 0 0; }
+.task-sys { display: flex; justify-content: center; overflow-x: auto; padding: 6px 0; }
+
+/* Equations */
+.math { font-family: var(--font-math); font-size: 21px; }
+.math i { font-style: italic; }
+.math sub { font-size: 0.68em; vertical-align: -0.3em; line-height: 0; }
+.lgs { display: grid; grid-template-columns: auto auto auto auto auto auto auto; column-gap: 0; row-gap: 6px; align-items: baseline; width: max-content; }
+.lgs .lb { padding-right: 14px; font-style: normal; }
+.lgs .t { text-align: right; padding-left: 6px; white-space: nowrap; }
+.lgs .eq { padding: 0 8px; }
+.lgs .r { text-align: left; white-space: nowrap; }
+.lgs .an, .mat .an { color: var(--pen); padding-left: 26px; white-space: nowrap; font-size: 0.92em; }
+.sg { padding: 0 0.28em; }
+.mat { display: grid; grid-template-columns: 10px auto auto auto auto 10px auto; row-gap: 4px; align-items: center; width: max-content; }
+.mat .pl, .mat .pr { grid-row: 1 / span 3; align-self: stretch; border: 2px solid var(--ink); }
+.mat .pl { grid-column: 1; border-right: 0; border-radius: 12px 0 0 12px; }
+.mat .pr { grid-column: 6; border-left: 0; border-radius: 0 12px 12px 0; }
+.mat .c { text-align: right; padding: 2px 10px; font-variant-numeric: tabular-nums; min-width: 2.4em; }
+.mat .rhs { border-left: 1.5px solid var(--ink); padding-left: 10px; text-align: right; }
+.mat .an { grid-column: 7; }
+
+/* Answer */
+.answer { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; }
+.lset { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.lset .math { font-size: 24px; }
+.lset input {
+  width: 4.2em; font: 500 20px var(--font-ui); text-align: center; padding: 6px 4px; border-radius: 8px;
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.lset input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.lset input.ok { border-color: var(--good); background: var(--good-soft); }
+.lset input.no { border-color: var(--bad); background: var(--bad-soft); }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn { font: 500 15px var(--font-ui); padding: 9px 16px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.feedback { border-radius: 10px; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; }
+.feedback.good { background: var(--good-soft); color: var(--good); }
+.feedback.bad { background: var(--bad-soft); color: var(--bad); }
+.feedback.info { background: var(--accent-soft); color: var(--accent); }
+.feedback strong { font-size: 17px; }
+.feedback .math { font-size: 19px; }
+
+/* Hints */
+.hints { display: flex; flex-direction: column; gap: 12px; }
+.hint { background: var(--hint-soft); border: 1px solid var(--hint-line); border-radius: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hint h3 { margin: 0; font-size: 15px; letter-spacing: 0.3px; }
+.hint h3 span { color: var(--muted); font-weight: 500; }
+.hint p { margin: 0; max-width: 70ch; }
+.hint .math { font-size: 19px; }
+.calc { overflow-x: auto; padding: 4px 0; }
+.calc-row { display: flex; gap: 14px; align-items: baseline; white-space: nowrap; font-family: var(--font-math); font-size: 19px; }
+.calc-row .bar { color: var(--muted); }
+details summary { cursor: pointer; color: var(--accent); font-weight: 500; font-size: 15px; }
+details[open] summary { margin-bottom: 8px; }
+.inline-sys { overflow-x: auto; }
+
+/* Solution sheet */
+.solution h2 { margin: 0; font-family: var(--font-math); font-weight: 600; font-size: 26px; }
+.sol-head { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1.5px solid var(--ink); font-weight: 700; padding-bottom: 6px; }
+.sol-head span + span { padding-left: 20px; border-left: 1.5px dashed var(--line); }
+.stage { display: flex; flex-direction: column; gap: 10px; }
+.stage-title { font-weight: 700; }
+.stage-title .math { font-size: 18px; }
+.note { color: var(--muted); font-size: 15px; margin: 0; max-width: 75ch; }
+.note b { color: var(--ink); font-weight: 500; }
+.blk { display: grid; grid-template-columns: 1fr 1fr; }
+.blk > div { overflow-x: auto; padding: 6px 0 6px 18px; min-width: 0; }
+.blk > div + div { border-left: 1.5px dashed var(--line); padding-left: 20px; }
+.back { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1.5px solid var(--ink); }
+.back > div { padding: 10px 14px 4px; display: flex; flex-direction: column; gap: 6px; min-width: 0; overflow-x: auto; }
+.back > div + div { border-left: 1.5px solid var(--ink); }
+.back .bh { font-size: 17px; white-space: nowrap; }
+.back .bh b { font-family: var(--font-ui); }
+.back .bl { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-top: 6px; }
+.back .bl { align-items: center; }
+
+.nr-wrap { display: flex; flex-wrap: wrap; gap: 14px; padding: 4px 0 6px; }
+.nr { border: 1.5px dashed var(--line); border-radius: 10px; padding: 10px 14px; background: var(--surface); max-width: 100%; overflow-x: auto; }
+.nr-t { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.nr-t .math { font-size: 16px; color: var(--pen); }
+.nr table { border-collapse: collapse; font-size: 18px; font-variant-numeric: tabular-nums; }
+.nr th, .nr td { padding: 3px 12px; text-align: right; white-space: nowrap; }
+.nr thead th { font-weight: 400; color: var(--muted); font-size: 16px; border-bottom: 1px solid var(--line); }
+.nr thead th.rs { font-family: var(--font-ui); font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
+.nr tbody th { font-weight: 400; text-align: left; color: var(--pen); padding-left: 0; }
+.nr tbody tr:first-child th { color: var(--ink); }
+.nr .rs { border-left: 1.5px solid var(--ink); }
+.nr tr.res td, .nr tr.res th { border-top: 2px solid var(--ink); font-weight: 600; color: var(--ink); }
+.eqs { display: grid; grid-template-columns: auto auto auto auto; column-gap: 8px; row-gap: 6px; align-items: baseline; width: max-content; font-size: 19px; }
+.eqs .el { text-align: right; white-space: nowrap; }
+.eqs .er { white-space: nowrap; }
+.eqs .ec { color: var(--pen); white-space: nowrap; padding-left: 10px; }
+.eqs .ec:not(:empty) { border-left: 1.5px solid var(--pen); }
+.answer-wrap { display: flex; flex-direction: column; gap: 14px; }
+.kind-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.kind-q { font-weight: 500; }
+.lset-inf { display: flex; flex-direction: column; gap: 6px; }
+.lset input.wide { width: 8.5em; }
+.inf-note, .pick-note { margin: 0; color: var(--muted); font-size: 14px; }
+.inf-note .math { font-size: 17px; }
+.inf-note code { font-size: 13px; background: var(--accent-soft); color: var(--accent); padding: 1px 6px; border-radius: 5px; }
+.etx { margin: 0 0 4px; font-family: var(--font-ui); font-size: 15px; color: var(--muted); max-width: 34ch; }
+.eqs { max-width: 100%; overflow-x: auto; }
+.back.single { grid-template-columns: 1fr; }
+.lsg { font-size: 18px; }
+.lsg .math { font-size: 23px; }
+
+@media (max-width: 760px) {
+  .sol-head { display: none; }
+  .blk { grid-template-columns: 1fr; }
+  .blk > div { padding-left: 0; }
+  .blk > div + div { border-left: 0; border-top: 1px dashed var(--line); padding-left: 0; }
+  .back { grid-template-columns: 1fr; }
+  .back > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .back .bl { align-items: flex-start; }
+  .math { font-size: 19px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hint, .feedback, .solution { animation: rise 0.25s ease-out; }
+  @keyframes rise { from { transform: translateY(6px); opacity: 0.4; } to { transform: none; opacity: 1; } }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Gauß-Trainer</h1>
+      <p class="sub">Lineare Gleichungssysteme mit drei Unbekannten lösen</p>
+    </div>
+    <div class="stats" aria-live="polite">
+      <span class="stat">Richtig: <b id="st-ok">0</b> von <b id="st-all">0</b></span>
+      <span class="stat">Serie: <b id="st-streak">0</b></span>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="ctl"><span class="ctl-label">Niveau</span>
+      <div class="seg" id="seg-level" role="group" aria-label="Niveau">
+        <button type="button" data-v="leicht" aria-pressed="true">Leicht</button>
+        <button type="button" data-v="mittel" aria-pressed="false">Mittel</button>
+        <button type="button" data-v="gemischt" aria-pressed="false">Gemischt</button>
+      </div>
+    </div>
+    <div class="ctl"><span class="ctl-label">Aufgabe als</span>
+      <div class="seg" id="seg-not" role="group" aria-label="Schreibweise der Aufgabe">
+        <button type="button" data-v="lgs" aria-pressed="false">LGS</button>
+        <button type="button" data-v="matrix" aria-pressed="false">Matrix</button>
+        <button type="button" data-v="gemischt" aria-pressed="true">Gemischt</button>
+      </div>
+    </div>
+    <div class="ctl"><span class="ctl-label">Aufgabentyp · Lösungen</span>
+      <div class="seg" id="seg-cases" role="group" aria-label="Welche Lösungsmengen vorkommen">
+        <button type="button" data-v="all" aria-pressed="true">Gemischt</button>
+        <button type="button" data-v="one" aria-pressed="false">Genau eine</button>
+        <button type="button" data-v="none" aria-pressed="false">Keine</button>
+        <button type="button" data-v="inf" aria-pressed="false" title="Unendlich viele Lösungen">Unendlich</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="card" aria-labelledby="task-title">
+    <div class="task-top">
+      <span class="task-title" id="task-title">Aufgabe 1</span>
+      <span class="chip" id="task-chip">leicht</span>
+    </div>
+    <p class="prompt">Bestimme die Lösungsmenge des folgenden Gleichungssystems.</p>
+    <div class="task-sys math" id="task-sys"></div>
+
+    <form class="answer-wrap" id="answer-form" autocomplete="off">
+      <div class="kind-row" id="kind-row">
+        <span class="kind-q">Wie viele Lösungen hat das LGS?</span>
+        <div class="seg" id="seg-kind" role="group" aria-label="Anzahl der Lösungen">
+          <button type="button" data-v="one" aria-pressed="false">Genau eine</button>
+          <button type="button" data-v="none" aria-pressed="false">Keine</button>
+          <button type="button" data-v="inf" aria-pressed="false">Unendlich viele</button>
+        </div>
+      </div>
+      <div class="answer">
+        <div class="lset" id="ans-one" hidden>
+          <span class="math">𝕃 = {(</span>
+          <input id="in-x1" inputmode="text" aria-label="x1" placeholder="x₁">
+          <span class="math">;</span>
+          <input id="in-x2" inputmode="text" aria-label="x2" placeholder="x₂">
+          <span class="math">;</span>
+          <input id="in-x3" inputmode="text" aria-label="x3" placeholder="x₃">
+          <span class="math">)}</span>
+        </div>
+        <div class="lset" id="ans-none" hidden>
+          <span class="math">𝕃 = { }</span>
+        </div>
+        <div class="lset-inf" id="ans-inf" hidden>
+          <div class="lset">
+            <span class="math">𝕃 = {(</span>
+            <input class="wide" id="in-t1" inputmode="text" aria-label="x1 in Abhängigkeit von t" placeholder="x₁ mit t">
+            <span class="math">;</span>
+            <input class="wide" id="in-t2" inputmode="text" aria-label="x2 in Abhängigkeit von t" placeholder="x₂ mit t">
+            <span class="math">; <i>t</i>) | <i>t</i> ∈ ℝ}</span>
+          </div>
+          <p class="inf-note">Setze <span class="math"><i>x</i><sub>3</sub> = <i>t</i></span>. Eingabe zum Beispiel: <code>2 - 3t</code> oder <code>-t</code></p>
+        </div>
+        <p class="pick-note" id="ans-pick">Wähle zuerst aus, wie viele Lösungen das LGS hat.</p>
+        <div class="btns">
+          <button class="btn primary" type="submit" id="btn-check">Prüfen</button>
+          <button class="btn" type="button" id="btn-hint">Tipp</button>
+          <button class="btn" type="button" id="btn-solution">Lösungsweg</button>
+          <button class="btn" type="button" id="btn-next">Neue Aufgabe</button>
+        </div>
+      </div>
+    </form>
+    <div id="feedback" hidden></div>
+    <div class="hints" id="hints" aria-live="polite"></div>
+  </section>
+
+  <section class="card solution" id="solution" hidden aria-label="Lösungsweg"></section>
+</div>
+
+<script>
+/*CORE-START*/
+const ROM = ['I', 'II', 'III'];
+const lab = i => '(' + ROM[i] + ')';
+const fmt = n => (n < 0 ? '−' + (-n) : String(n));
+const fmtP = n => (n < 0 ? '(' + fmt(n) + ')' : String(n));
+const varH = j => `<i>x</i><sub>${j + 1}</sub>`;
+const clone = M => M.map(r => r.slice());
+const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const nz = (a, b) => { let v = 0; while (v === 0) v = randInt(a, b); return v; };
+const det3 = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+const isMult = (a, b) => a % b === 0; // a is a multiple of b
+
+// Which row should be the working row for column k? Prefer factor ±1, then a factor that divides the others, then a row that can be divided completely.
+function pickPivot(M, k) {
+  const c = [];
+  for (let p = k; p < 3; p++) {
+    const piv = M[p][k];
+    if (piv === 0) continue;
+    const others = [];
+    for (let r = k; r < 3; r++) if (r !== p && M[r][k] !== 0) others.push(r);
+    let mode, cost;
+    if (others.every(r => isMult(M[r][k], piv))) { mode = 'direct'; cost = Math.abs(piv) === 1 ? 0 : 1; }
+    else if (M[p].every(v => isMult(v, piv))) { mode = 'normalize'; cost = 2; }
+    else continue;
+    if (p !== k) cost += 0.5;
+    c.push({ p, piv, mode, cost });
+  }
+  c.sort((a, b) => a.cost - b.cost || a.p - b.p);
+  return c[0] || null;
+}
+
+function solve(A0) {
+  let M = clone(A0);
+  const stages = [];
+  for (let k = 0; k < 2; k++) {
+    const st = { k, start: clone(M), events: [] };
+    const ch = pickPivot(M, k);
+    if (!ch) return null;
+    st.choice = ch;
+    if (ch.p !== k) {
+      const before = clone(M);
+      [M[k], M[ch.p]] = [M[ch.p], M[k]];
+      st.swap = { a: k, b: ch.p, before, after: clone(M), hadZero: before[k][k] === 0 };
+    }
+    st.preNorm = clone(M);
+    if (ch.mode === 'normalize') {
+      const d = M[k][k];
+      const before = clone(M);
+      M[k] = M[k].map(v => v / d);
+      st.norm = { row: k, d, before, after: clone(M) };
+    }
+    st.preElim = clone(M);
+    st.elims = [];
+    st.zeros = [];
+    const piv = M[k][k];
+    for (let r = k + 1; r < 3; r++) {
+      if (M[r][k] === 0) { st.zeros.push(r); continue; }
+      const f = M[r][k] / piv;
+      const before = clone(M);
+      M[r] = M[r].map((v, j) => v - f * M[k][j]);
+      st.elims.push({ row: r, src: k, f, before, after: clone(M) });
+    }
+    st.end = clone(M);
+    stages.push(st);
+  }
+  const kind = M[2][2] !== 0 ? 'one' : M[2][3] !== 0 ? 'none' : 'inf';
+  return { A0: clone(A0), stages, Z: M, kind };
+}
+
+const LEVELS = {
+  leicht: { xr: [-3, 4], ar: 3, zeroP: 0.12, maxAbs: 20, maxB: 30 },
+  mittel: { xr: [-5, 5], ar: 6, zeroP: 0.08, maxAbs: 45, maxB: 60 }
+};
+
+function allMatrices(s) {
+  const out = [s.A0, s.Z];
+  s.stages.forEach(st => { out.push(st.start, st.preNorm, st.preElim, st.end); st.elims.forEach(e => out.push(e.after)); });
+  return out.flat(2);
+}
+
+const dot3 = (r, x) => r[0] * x[0] + r[1] * x[1] + r[2] * x[2];
+const isInt = v => Number.isInteger(v);
+
+// kind: 'one' (genau eine Lösung), 'none' (keine Lösung), 'inf' (unendlich viele, x3 = t)
+function generate(level, kind = 'one') {
+  const L = LEVELS[level];
+  for (let t = 0; t < 60000; t++) {
+    let A = [0, 1, 2].map(() => [0, 1, 2].map(() => (Math.random() < L.zeroP ? 0 : nz(-L.ar, L.ar))));
+    if (level === 'leicht') A.forEach(r => { if (Math.random() < 0.8) r[0] = randInt(1, 3); });
+    if (level === 'mittel' && Math.random() < 0.35) {
+      const r = randInt(0, 2), c = [2, 3, -2, 2][randInt(0, 3)];
+      A[r] = [nz(1, 2), nz(-2, 2), nz(-2, 2)].map(v => v * c);
+    }
+    const x = [0, 1, 2].map(() => randInt(L.xr[0], L.xr[1]));
+    if (x.filter(v => v === 0).length > 1) continue;
+    let M;
+    if (kind === 'one') {
+      if (det3(A) === 0) continue;
+      M = A.map(r => [...r, dot3(r, x)]);
+    } else {
+      const al = randInt(-2, 2), be = randInt(-2, 2);
+      if (!al || !be) { if (Math.random() < 0.7) continue; if (!al && !be) continue; }
+      const cr = [A[0][1] * A[1][2] - A[0][2] * A[1][1], A[0][2] * A[1][0] - A[0][0] * A[1][2], A[0][0] * A[1][1] - A[0][1] * A[1][0]];
+      if (cr.every(v => v === 0)) continue;
+      A[2] = A[0].map((v, j) => al * v + be * A[1][j]);
+      if (A[2].some(v => Math.abs(v) > L.ar + 3)) continue;
+      M = A.map(r => [...r, dot3(r, x)]);
+      if (kind === 'none') M[2][3] += nz(-4, 4);
+      for (let i = 2; i > 0; i--) { const j = randInt(0, i); [M[i], M[j]] = [M[j], M[i]]; }
+    }
+    if (M.some(r => r.slice(0, 3).every(v => v === 0))) continue;
+    if (M.flat().filter((v, i) => i % 4 !== 3 && v === 0).length > 2) continue;
+    if (M.some(r => Math.abs(r[3]) > L.maxB)) continue;
+    const s = solve(M);
+    if (!s || s.kind !== kind) continue;
+    if (s.stages.some(st => st.elims.length === 0)) continue;
+    if (Math.max(...allMatrices(s).map(Math.abs)) > L.maxAbs) continue;
+    const hasNorm = s.stages.some(st => st.norm);
+    const bigPiv = s.stages.some(st => Math.abs(st.preElim[st.k][st.k]) > 1);
+    const bigF = s.stages.some(st => st.elims.some(e => Math.abs(e.f) > 3));
+    if (level === 'leicht') {
+      if (hasNorm || bigF) continue;
+      if (Math.abs(s.stages[0].preElim[0][0]) !== 1) continue;
+      if (Math.abs(s.stages[1].preElim[1][1]) > 2) continue;
+    } else {
+      if (!hasNorm && !bigPiv && Math.random() < (kind === 'one' ? 0.85 : 0.6)) continue;
+    }
+    const Z = s.Z;
+    if (kind === 'one') {
+      s.sol = x.map(v => [v, 0]);
+    } else if (kind === 'inf') {
+      // x3 = t, then back substitution with pairs [constant, t-coefficient]
+      const v3 = [0, 1];
+      const v2 = [(Z[1][3] - Z[1][2] * v3[0]) / Z[1][1], (-Z[1][2] * v3[1]) / Z[1][1]];
+      const v1 = [(Z[0][3] - Z[0][1] * v2[0] - Z[0][2] * v3[0]) / Z[0][0], (-Z[0][1] * v2[1] - Z[0][2] * v3[1]) / Z[0][0]];
+      if (![...v1, ...v2].every(isInt)) continue;
+      if (v1[1] === 0 && v2[1] === 0) continue;
+      if ([...v1, ...v2].some(v => Math.abs(v) > 12)) continue;
+      s.sol = [v1, v2, v3].map(v => v.map(n => n + 0));
+    } else {
+      s.sol = null;
+    }
+    s.level = level;
+    return s;
+  }
+  return null;
+}
+
+// ---------- HTML builders ----------
+function termCells(row) {
+  const cells = [];
+  let first = true;
+  for (let j = 0; j < 3; j++) {
+    const c = row[j];
+    if (c === 0) { cells.push(''); continue; }
+    if (first) { cells.push((c < 0 ? '−' : '') + Math.abs(c) + varH(j)); first = false; }
+    else cells.push(`<span class="sg">${c < 0 ? '−' : '+'}</span>${Math.abs(c)}${varH(j)}`);
+  }
+  if (first) cells[0] = '0';
+  return cells;
+}
+function eqInline(row) {
+  const parts = [];
+  for (let j = 0; j < 3; j++) {
+    const c = row[j];
+    if (c === 0) continue;
+    if (!parts.length) parts.push((c < 0 ? '−' : '') + Math.abs(c) + varH(j));
+    else parts.push(`${c < 0 ? '−' : '+'} ${Math.abs(c)}${varH(j)}`);
+  }
+  return (parts.length ? parts.join(' ') : '0') + ' = ' + fmt(row[3]);
+}
+function lgsHTML(M, ann = {}) {
+  let h = '<div class="lgs math">';
+  M.forEach((row, i) => {
+    const t = termCells(row);
+    h += `<span class="lb">${lab(i)}</span><span class="t">${t[0]}</span><span class="t">${t[1]}</span><span class="t">${t[2]}</span><span class="eq">=</span><span class="r">${fmt(row[3])}</span><span class="an">${ann[i] || ''}</span>`;
+  });
+  return h + '</div>';
+}
+function matHTML(M, ann = {}) {
+  let h = '<div class="mat math"><span class="pl"></span><span class="pr"></span>';
+  M.forEach((row, i) => {
+    const r = i + 1;
+    h += `<span class="c" style="grid-row:${r};grid-column:2">${fmt(row[0])}</span><span class="c" style="grid-row:${r};grid-column:3">${fmt(row[1])}</span><span class="c" style="grid-row:${r};grid-column:4">${fmt(row[2])}</span><span class="c rhs" style="grid-row:${r};grid-column:5">${fmt(row[3])}</span><span class="an" style="grid-row:${r}">${ann[i] || ''}</span>`;
+  });
+  return h + '</div>';
+}
+function blockHTML(M, ann = {}) {
+  return `<div class="blk"><div>${lgsHTML(M, ann)}</div><div>${matHTML(M, ann)}</div></div>`;
+}
+function elimText(e) {
+  const a = Math.abs(e.f);
+  return `${lab(e.row)} ${e.f > 0 ? '−' : '+'} ${a === 1 ? '' : a + ' · '}${lab(e.src)}`;
+}
+function normText(n) { return `${lab(n.row)} : ${fmtP(n.d)}`; }
+
+function swapReason(st) {
+  const k = st.k, p = st.choice.p, piv = st.choice.piv;
+  const parts = [];
+  if (st.swap.hadZero) parts.push(`In ${lab(k)} fehlt ${varH(k)}, damit kann man nicht eliminieren.`);
+  if (Math.abs(piv) === 1) parts.push(`${lab(p)} hat bei ${varH(k)} den Vorfaktor ${fmt(piv)}, damit lässt sich direkt verrechnen.`);
+  else if (st.choice.mode === 'direct') parts.push(`Die übrigen Vorfaktoren von ${varH(k)} sind Vielfache von ${fmt(piv)} aus ${lab(p)}.`);
+  else parts.push(`${lab(p)} lässt sich vollständig durch ${fmtP(piv)} teilen.`);
+  return parts.join(' ');
+}
+function otherCoefs(M, k) {
+  const out = [];
+  for (let r = k + 1; r < 3; r++) if (M[r][k] !== 0) out.push(fmt(M[r][k]));
+  return out;
+}
+function notMult(list, d) {
+  return list.length > 1 ? `Die Vorfaktoren ${joinDe(list)} sind keine Vielfachen von ${fmt(d)}.` : `Der Vorfaktor ${list[0]} ist kein Vielfaches von ${fmt(d)}.`;
+}
+function joinDe(a) { return a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ' und ' + a[a.length - 1]; }
+
+// a + b·t as text
+function linE(a, b) {
+  if (b === 0) return fmt(a);
+  const tp = (Math.abs(b) === 1 ? '' : Math.abs(b)) + 't';
+  if (a === 0) return (b < 0 ? '−' : '') + tp;
+  return `${fmt(a)} ${b < 0 ? '−' : '+'} ${tp}`;
+}
+// Back substitution: each line is {l, r, cmd, bold} or {text}; cmd is the "Kommandostrich" operation.
+function backSub(s) {
+  const Z = s.Z, V = s.sol;
+  const cv = (c, j) => (c === 1 ? varH(j) : c === -1 ? '−' + varH(j) : fmt(c) + varH(j));
+  const tT = k => (Math.abs(k) === 1 ? '' : Math.abs(k)) + 't';
+  const plus = (c, k) => {
+    const p = [];
+    if (c !== 0 || k === 0) p.push(c < 0 ? `− ${-c}` : `+ ${c}`);
+    if (k !== 0) p.push(k < 0 ? `− ${tT(k)}` : `+ ${tT(k)}`);
+    return p.join(' ');
+  };
+  const minus = (c, k) => {
+    const p = [];
+    if (c !== 0) p.push(c > 0 ? `− ${c}` : `+ ${-c}`);
+    if (k !== 0) p.push(k > 0 ? `− ${tT(k)}` : `+ ${tT(k)}`);
+    return p.join(' ');
+  };
+  const sub = c => str => `${c < 0 ? '−' : '+'} ${Math.abs(c) === 1 ? '' : Math.abs(c) + ' · '}(${str})`;
+  const solveLines = (a, j, c, k, b, out) => {
+    if (c !== 0 || k !== 0) out.push({ l: `${cv(a, j)} ${plus(c, k)}`, r: fmt(b), cmd: minus(c, k) });
+    if (a !== 1) out.push({ l: cv(a, j), r: linE(b - c, -k), cmd: a === -1 ? '· (−1)' : `: ${fmtP(a)}` });
+    out.push({ l: varH(j), r: linE(V[j][0], V[j][1]), bold: true });
+  };
+  const cols = [];
+  const c3 = { head: `<b>Aus ${lab(2)}:</b> ${eqInline(Z[2])}`, lines: [] };
+  if (s.kind === 'none') {
+    c3.lines.push({ text: 'Falsche Aussage (Widerspruch). Das LGS hat keine Lösung.' });
+    return [c3];
+  }
+  if (s.kind === 'inf') {
+    c3.lines.push({ text: `Wahre Aussage. ${varH(2)} ist frei wählbar:` });
+    c3.lines.push({ l: varH(2), r: 't', bold: true });
+  } else solveLines(Z[2][2], 2, 0, 0, Z[2][3], c3.lines);
+  cols.push(c3);
+  const c2 = { head: `<b>${varH(2)} in ${lab(1)}:</b> ${eqInline(Z[1])}`, lines: [] };
+  const a22 = Z[1][1], a23 = Z[1][2], b2 = Z[1][3];
+  let c = 0, k = 0;
+  if (a23 !== 0) {
+    c = a23 * V[2][0]; k = a23 * V[2][1];
+    c2.lines.push({ l: `${cv(a22, 1)} ${sub(a23)(linE(V[2][0], V[2][1]))}`, r: fmt(b2) });
+  }
+  solveLines(a22, 1, c, k, b2, c2.lines);
+  cols.push(c2);
+  const c1 = { head: `<b>${varH(1)}, ${varH(2)} in ${lab(0)}:</b> ${eqInline(Z[0])}`, lines: [] };
+  const a11 = Z[0][0], b1 = Z[0][3];
+  const terms = [], expanded = [];
+  c = 0; k = 0;
+  [1, 2].forEach(j => {
+    if (Z[0][j] === 0) return;
+    terms.push(sub(Z[0][j])(linE(V[j][0], V[j][1])));
+    expanded.push(plus(Z[0][j] * V[j][0], Z[0][j] * V[j][1]));
+    c += Z[0][j] * V[j][0]; k += Z[0][j] * V[j][1];
+  });
+  if (terms.length) c1.lines.push({ l: `${cv(a11, 0)} ${terms.join(' ')}`, r: fmt(b1) });
+  if (s.kind === 'inf' && terms.length > 1) c1.lines.push({ l: `${cv(a11, 0)} ${expanded.join(' ')}`, r: fmt(b1) });
+  solveLines(a11, 0, c, k, b1, c1.lines);
+  cols.push(c1);
+  return cols;
+}
+function eqsHTML(lines) {
+  const texts = lines.filter(L => L.text).map(L => `<p class="etx">${L.text}</p>`).join('');
+  return texts + '<div class="eqs math">' + lines.filter(L => !L.text).map(L => {
+    const w = x => (L.bold ? `<b>${x}</b>` : x);
+    return `<span class="el">${w(L.l)}</span><span class="ee">${w('=')}</span><span class="er">${w(L.r)}</span><span class="ec">${L.cmd || ''}</span>`;
+  }).join('') + '</div>';
+}
+
+// Nebenrechnung: column-wise table of a row operation
+function nrTable(title, rows) {
+  let h = `<div class="nr"><div class="nr-t">Nebenrechnung: <span class="math">${title}</span></div><table class="math"><thead><tr><th></th><th>${varH(0)}</th><th>${varH(1)}</th><th>${varH(2)}</th><th class="rs">rechts</th></tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    h += `<tr${i === rows.length - 1 ? ' class="res"' : ''}><th>${r[0]}</th>${r[1].map((v, j) => `<td${j === 3 ? ' class="rs"' : ''}>${fmt(v)}</td>`).join('')}</tr>`;
+  });
+  return h + '</tbody></table></div>';
+}
+function nrElim(e) {
+  const M = e.before, a = Math.abs(e.f);
+  const lbl = `${e.f > 0 ? '−' : '+'}${a === 1 ? '' : a + ' · '}${lab(e.src)}`;
+  return nrTable(elimText(e), [[lab(e.row), M[e.row]], [lbl, M[e.src].map(v => -e.f * v)], [`neu ${lab(e.row)}`, e.after[e.row]]]);
+}
+function nrNorm(n) {
+  return nrTable(normText(n), [[lab(n.row), n.before[n.row]], [`neu ${lab(n.row)}`, n.after[n.row]]]);
+}
+function lsetHTML(s) {
+  if (s.kind === 'none') return '𝕃 = { }';
+  const V = s.sol;
+  if (s.kind === 'inf') return `𝕃 = {(${linE(V[0][0], V[0][1])}; ${linE(V[1][0], V[1][1])}; t) | t ∈ ℝ}`;
+  return `𝕃 = {(${fmt(V[0][0])}; ${fmt(V[1][0])}; ${fmt(V[2][0])})}`;
+}
+const KIND_TEXT = { one: 'genau eine Lösung', none: 'keine Lösung', inf: 'unendlich viele Lösungen' };
+
+function stageTitle(k) {
+  return k === 0 ? `Schritt 1 – ${varH(0)} aus (II) und (III) eliminieren:` : `Schritt 2 – ${varH(1)} aus (III) eliminieren:`;
+}
+
+function solutionHTML(s) {
+  let h = '<h2>Lösungsweg</h2>';
+  h += '<div class="sol-head"><span>Schreibweise LGS</span><span>Schreibweise Matrix</span></div>';
+  h += `<div class="stage"><div class="stage-title">Ausgangssystem:</div>${blockHTML(s.A0)}</div>`;
+  s.stages.forEach(st => {
+    const k = st.k;
+    h += `<div class="stage"><div class="stage-title"><span class="math">${stageTitle(k)}</span></div>`;
+    if (st.swap) h += `<p class="note math-note"><b>Zeilen tauschen ${lab(st.swap.a)} ↔ ${lab(st.swap.b)}:</b> ${swapReason(st)}</p>`;
+    if (st.norm) {
+      h += `<p class="note"><b>Normieren:</b> ${notMult(otherCoefs(st.preNorm, k), st.norm.d)} Deshalb wird ${varH(k)} in ${lab(k)} zuerst auf den Vorfaktor 1 gebracht.</p>`;
+      h += blockHTML(st.preNorm, { [k]: normText(st.norm) });
+      h += `<div class="nr-wrap">${nrNorm(st.norm)}</div>`;
+    } else if (!st.swap && Math.abs(st.preElim[k][k]) > 1) {
+      h += `<p class="note"><b>Direkt verrechnen:</b> ${joinDe(otherCoefs(st.preElim, k))} ${otherCoefs(st.preElim, k).length > 1 ? 'sind Vielfache' : 'ist ein Vielfaches'} von ${fmt(st.preElim[k][k])}.</p>`;
+    }
+    const ann = {};
+    st.elims.forEach(e => { ann[e.row] = elimText(e); });
+    h += blockHTML(st.preElim, ann);
+    h += `<div class="nr-wrap">${st.elims.map(nrElim).join('')}</div>`;
+    h += '</div>';
+  });
+  h += `<div class="stage"><div class="stage-title">Schritt 3 – Stufenform und ${s.kind === 'none' ? 'Auswertung' : 'Rückwärtseinsetzen'}:</div>${blockHTML(s.Z)}</div>`;
+  h += `<div class="back${s.kind === 'none' ? ' single' : ''}">` + backSub(s).map(c => `<div><div class="bh math">${c.head}</div><div class="bl">${eqsHTML(c.lines)}</div></div>`).join('') + '</div>';
+  h += `<p class="lsg"><b>Lösungsmenge:</b> <span class="math">${lsetHTML(s)}</span></p>`;
+  if (s.kind === 'inf') h += `<p class="note">Der Parameter t steht für eine beliebige reelle Zahl. Jeder Wert von t liefert eine Lösung, zum Beispiel t = 0: (${fmt(s.sol[0][0])}; ${fmt(s.sol[1][0])}; 0).</p>`;
+  return h;
+}
+
+function sysDetails(M, label) {
+  return `<details><summary>${label}</summary><div class="inline-sys">${blockHTML(M)}</div></details>`;
+}
+
+function buildHints(s) {
+  const H = [];
+  s.stages.forEach(st => {
+    const k = st.k, v = varH(k);
+    const S = st.start;
+    const rowsK = k === 0 ? [0, 1, 2] : [1, 2];
+    const coefList = rowsK.map(r => `${lab(r)}: ${fmt(S[r][k])}`).join(', ');
+    let txt = k === 0
+      ? `<p>Ziel: In (II) und (III) soll ${v} verschwinden. Schau dir dazu die Vorfaktoren von ${v} an: <span class="math">${coefList}</span>.</p>`
+      : `<p>Ziel: In (III) soll ${v} verschwinden. (I) bleibt ab jetzt unverändert. Die Vorfaktoren von ${v} in (II) und (III) sind <span class="math">${coefList}</span>.</p>`;
+    if (st.swap) {
+      txt += `<p>${swapReason(st)} <b>Tausche ${lab(st.swap.a)} und ${lab(st.swap.b)}.</b></p>`;
+    } else if (st.choice.mode === 'direct') {
+      const piv = st.preElim[k][k];
+      txt += Math.abs(piv) === 1
+        ? `<p>${lab(k)} hat bei ${v} schon den Vorfaktor ${fmt(piv)}. Ein Zeilentausch ist nicht nötig, du kannst direkt mit ${lab(k)} rechnen.</p>`
+        : `<p>Die anderen Vorfaktoren sind Vielfache von ${fmt(piv)}. Du kannst also direkt mit ${lab(k)} rechnen, ohne zu tauschen.</p>`;
+    } else {
+      txt += `<p>Keine Zeile hat hier den Vorfaktor 1, und die Zahlen sind keine Vielfachen voneinander. Ein Tausch hilft nicht weiter.</p>`;
+    }
+    st.zeros.forEach(r => { txt += `<p>In ${lab(r)} fehlt ${v} bereits. Diese Zeile musst du in diesem Schritt nicht verändern.</p>`; });
+    H.push({ title: `Schritt ${k + 1} · Überblick`, html: txt, extra: st.swap ? sysDetails(st.swap.after, 'System nach dem Tausch anzeigen') : '' });
+
+    if (st.norm) {
+      const n = st.norm;
+      H.push({
+        title: `Schritt ${k + 1} · Normieren`,
+        html: `<p>${notMult(otherCoefs(st.preNorm, k), n.d)} Bringe ${v} in ${lab(k)} deshalb zuerst auf den Vorfaktor 1: <b>Teile die ganze Zeile ${lab(k)} durch ${fmtP(n.d)}</b>, also <span class="math">${normText(n)}</span>.</p>`,
+        extra: `<details><summary>Nebenrechnung anzeigen</summary>${nrNorm(n)}</details>`
+      });
+    }
+    st.elims.forEach((e, idx) => {
+      const piv = e.before[k][k], c = e.before[e.row][k];
+      let why;
+      if (e.f === 1) why = `In ${lab(e.row)} und ${lab(k)} hat ${v} denselben Vorfaktor ${fmt(c)}.`;
+      else if (e.f === -1) why = `In ${lab(e.row)} steht ${fmt(c)}${v}, in ${lab(k)} steht ${fmt(piv)}${v}. Die Vorfaktoren heben sich gegenseitig auf.`;
+      else why = `In ${lab(e.row)} steht ${fmt(c)}${v}, in ${lab(k)} steht ${fmt(piv)}${v}. ${fmt(c)} ist das ${fmt(e.f)}-Fache von ${fmt(piv)}.`;
+      const last = idx === st.elims.length - 1;
+      H.push({
+        title: `Schritt ${k + 1} · ${v} in ${lab(e.row)} eliminieren`,
+        html: `<p>${why} Rechne <b class="math">${elimText(e)}</b>, dann fällt ${v} weg.</p>`,
+        extra: `<details><summary>Nebenrechnung anzeigen</summary>${nrElim(e)}</details>` + (last ? sysDetails(st.end, `System nach Schritt ${k + 1} anzeigen`) : '')
+      });
+    });
+  });
+  const cols = backSub(s);
+  const det = (label, lines, tail = '') => `<details><summary>${label}</summary>${eqsHTML(lines)}${tail}</details>`;
+  if (s.kind === 'none') {
+    H.push({
+      title: 'Schritt 3 · Letzte Zeile auswerten',
+      html: `<p>Das System ist jetzt in Zeilenstufenform. In ${lab(2)} sind alle Vorfaktoren 0, es steht dort <span class="math">${eqInline(s.Z[2])}</span>. Ist diese Aussage wahr oder falsch? Was folgt daraus für die Lösungsmenge?</p>`,
+      extra: `<details><summary>Ergebnis anzeigen</summary><p>Die Aussage ist falsch (Widerspruch). Kein Zahlentripel erfüllt alle drei Gleichungen.</p><p class="math">${lsetHTML(s)}</p></details>`
+    });
+    return H;
+  }
+  if (s.kind === 'inf') {
+    H.push({
+      title: 'Schritt 3 · Letzte Zeile auswerten',
+      html: `<p>Das System ist jetzt in Zeilenstufenform. In ${lab(2)} steht <span class="math">${eqInline(s.Z[2])}</span>. Das ist immer wahr, die Zeile liefert keine Information. Es bleiben zwei Gleichungen für drei Unbekannte. <b>Setze deshalb ${varH(2)} = t</b> (t ist ein Parameter, also eine beliebige reelle Zahl).</p>`,
+      extra: ''
+    });
+    H.push({
+      title: 'Schritt 3 · Rückwärtseinsetzen: x₂',
+      html: `<p>Setze ${varH(2)} = t in ${lab(1)} ein: <span class="math">${eqInline(s.Z[1])}</span>. Löse nach ${varH(1)} auf. Terme mit t bringst du wie Zahlen mit dem Kommandostrich auf die andere Seite, z. B. <span class="math">| − 2t</span>.</p>`,
+      extra: det('Rechnung anzeigen', cols[1].lines)
+    });
+    H.push({
+      title: 'Schritt 3 · Rückwärtseinsetzen: x₁',
+      html: `<p>Setze ${varH(1)} und ${varH(2)} = t in ${lab(0)} ein: <span class="math">${eqInline(s.Z[0])}</span>. Multipliziere die Klammern aus, fasse Zahlen und t-Terme zusammen und löse nach ${varH(0)} auf. Schreibe die Lösungsmenge mit dem Parameter t auf.</p>`,
+      extra: det('Rechnung anzeigen', cols[2].lines, `<p class="math">${lsetHTML(s)}</p>`)
+    });
+    return H;
+  }
+  H.push({
+    title: 'Schritt 3 · Rückwärtseinsetzen: x₃',
+    html: `<p>Das System ist jetzt in Zeilenstufenform. Beginne unten: In ${lab(2)} steht nur noch ${varH(2)}, nämlich <span class="math">${eqInline(s.Z[2])}</span>. Löse nach ${varH(2)} auf und notiere jede Umformung hinter einem Kommandostrich, z. B. <span class="math">| : 3</span>.</p>`,
+    extra: det('Rechnung anzeigen', cols[0].lines)
+  });
+  H.push({
+    title: 'Schritt 3 · Rückwärtseinsetzen: x₂',
+    html: `<p>Setze deinen Wert für ${varH(2)} in ${lab(1)} ein: <span class="math">${eqInline(s.Z[1])}</span>. Setze den Wert in Klammern ein und löse nach ${varH(1)} auf.</p>`,
+    extra: det('Rechnung anzeigen', cols[1].lines)
+  });
+  H.push({
+    title: 'Schritt 3 · Rückwärtseinsetzen: x₁',
+    html: `<p>Setze ${varH(1)} und ${varH(2)} in ${lab(0)} ein: <span class="math">${eqInline(s.Z[0])}</span>. Löse nach ${varH(0)} auf und schreibe die Lösungsmenge als Punkt auf.</p>`,
+    extra: det('Rechnung anzeigen', cols[2].lines, `<p class="math">${lsetHTML(s)}</p>`)
+  });
+  return H;
+}
+
+function parseNum(str) {
+  let t = String(str).trim().replace(/[−–]/g, '-').replace(/\s+/g, '').replace(',', '.');
+  if (t === '') return null;
+  const m = t.match(/^(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)$/);
+  if (m) { const d = parseFloat(m[2]); return d === 0 ? NaN : parseFloat(m[1]) / d; }
+  if (!/^[-+]?\d+(\.\d+)?$/.test(t)) return NaN;
+  return parseFloat(t);
+}
+// "2 − 3t" → [2, -3]; null if empty, NaN if unreadable
+function parseLin(str) {
+  const t = String(str).trim().replace(/[−–]/g, '-').replace(/[·*]/g, '').replace(/\s+/g, '').replace(/,/g, '.');
+  if (t === '') return null;
+  const terms = t.match(/[+-]?[^+-]+/g);
+  if (!terms || terms.join('') !== t) return NaN;
+  let a = 0, b = 0;
+  for (const term of terms) {
+    const m = term.match(/^([+-]?)(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)?(t?)$/);
+    if (!m || (!m[2] && !m[3])) return NaN;
+    const sign = m[1] === '-' ? -1 : 1;
+    let num = 1;
+    if (m[2]) { const [pp, qq] = m[2].split('/'); num = parseFloat(pp) / (qq ? parseFloat(qq) : 1); if (!isFinite(num)) return NaN; }
+    if (m[3]) b += sign * num; else a += sign * num;
+  }
+  return [a, b];
+}
+/*CORE-END*/
+
+// ---------- UI ----------
+const $ = id => document.getElementById(id);
+const state = { level: 'leicht', notation: 'gemischt', cases: 'all', kind: null, n: 0, ok: 0, all: 0, streak: 0, task: null, hints: [], shown: 0, done: false, showMatrix: false };
+
+function store(key, val) { try { localStorage.setItem('gauss-' + key, val); } catch (e) {} }
+function load(key) { try { return localStorage.getItem('gauss-' + key); } catch (e) { return null; } }
+
+function setSeg(segId, value) {
+  document.querySelectorAll(`#${segId} button`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === value)));
+}
+function updateStats() {
+  $('st-ok').textContent = state.ok;
+  $('st-all').textContent = state.all;
+  $('st-streak').textContent = state.streak;
+}
+function renderTaskSystem() {
+  const M = state.task.A0;
+  $('task-sys').innerHTML = state.showMatrix ? matHTML(M) : lgsHTML(M);
+}
+function setKind(k) {
+  state.kind = k;
+  setSeg('seg-kind', k);
+  $('ans-one').hidden = k !== 'one';
+  $('ans-none').hidden = k !== 'none';
+  $('ans-inf').hidden = k !== 'inf';
+  $('ans-pick').hidden = !!k;
+}
+function newTask() {
+  const lvl = state.level === 'gemischt' ? (Math.random() < 0.5 ? 'leicht' : 'mittel') : state.level;
+  const r = Math.random();
+  const kind = state.cases !== 'all' ? state.cases : r < 0.4 ? 'one' : r < 0.7 ? 'none' : 'inf';
+  const s = generate(lvl, kind);
+  if (!s) return;
+  state.task = s;
+  state.n += 1;
+  state.hints = buildHints(s);
+  state.shown = 0;
+  state.done = false;
+  state.showMatrix = state.notation === 'matrix' ? true : state.notation === 'lgs' ? false : Math.random() < 0.5;
+  $('task-title').textContent = 'Aufgabe ' + state.n;
+  $('task-chip').textContent = lvl;
+  renderTaskSystem();
+  ['in-x1', 'in-x2', 'in-x3', 'in-t1', 'in-t2'].forEach(id => { const el = $(id); el.value = ''; el.className = ''; });
+  const fixed = state.cases !== 'all';
+  $('kind-row').hidden = fixed;
+  setKind(fixed ? state.cases : null);
+  $('feedback').hidden = true;
+  $('hints').innerHTML = '';
+  $('solution').hidden = true;
+  $('solution').innerHTML = '';
+  updateHintBtn();
+}
+function updateHintBtn() {
+  const b = $('btn-hint');
+  const total = state.hints.length;
+  b.textContent = state.shown >= total ? 'Alle Tipps gezeigt' : `Tipp ${state.shown + 1} von ${total}`;
+  b.disabled = state.shown >= total;
+}
+function showHint() {
+  if (state.shown >= state.hints.length) return;
+  const h = state.hints[state.shown];
+  state.shown += 1;
+  const div = document.createElement('div');
+  div.className = 'hint';
+  div.innerHTML = `<h3>Tipp ${state.shown} <span>· ${h.title}</span></h3>${h.html}${h.extra || ''}`;
+  $('hints').appendChild(div);
+  updateHintBtn();
+  div.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+function showSolution(scroll = true) {
+  const el = $('solution');
+  el.innerHTML = solutionHTML(state.task);
+  el.hidden = false;
+  if (scroll) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+function feedback(kind, html) {
+  const f = $('feedback');
+  f.className = 'feedback ' + kind;
+  f.innerHTML = html;
+  f.hidden = false;
+}
+function finish(correct, wrongHtml) {
+  const firstTry = !state.done;
+  state.done = true;
+  if (correct) {
+    if (firstTry) { state.all += 1; state.ok += 1; state.streak += 1; }
+    const helped = state.shown > 0 ? ` Du hast ${state.shown} ${state.shown === 1 ? 'Tipp' : 'Tipps'} genutzt.` : '';
+    feedback('good', `<strong>Richtig!</strong><span><span class="math">${lsetHTML(state.task)}</span>${helped}</span>`);
+  } else {
+    if (firstTry) { state.all += 1; state.streak = 0; }
+    feedback('bad', `<strong>Leider nicht ganz.</strong><span>${wrongHtml} Vergleiche deinen Rechenweg mit dem Lösungsweg unten.</span>`);
+    showSolution(true);
+  }
+  updateStats();
+  store('stats', JSON.stringify({ ok: state.ok, all: state.all, streak: state.streak }));
+}
+function verdict(names, right) {
+  const ok = names.filter((_, i) => right[i]);
+  const no = names.filter((_, i) => !right[i]);
+  if (!ok.length) return no.length > 1 ? 'Keiner der Werte stimmt.' : `${no[0]} stimmt nicht.`;
+  return `${joinDe(ok)} ${ok.length > 1 ? 'stimmen' : 'stimmt'}, ${joinDe(no)} ${no.length > 1 ? 'stimmen' : 'stimmt'} nicht.`;
+}
+function check(ev) {
+  ev.preventDefault();
+  const task = state.task;
+  if (!state.kind) { feedback('info', '<strong>Wähle zuerst aus, wie viele Lösungen das LGS hat.</strong>'); return; }
+  if (state.kind === 'one') {
+    const ids = ['in-x1', 'in-x2', 'in-x3'];
+    const vals = ids.map(id => parseNum($(id).value));
+    if (vals.some(v => v === null)) { feedback('info', '<strong>Bitte alle drei Werte eintragen.</strong>'); return; }
+    if (vals.some(v => Number.isNaN(v))) { feedback('info', '<strong>Bitte nur Zahlen eingeben,</strong><span>zum Beispiel 3, −2 oder 1/2.</span>'); return; }
+    if (task.kind !== 'one') { ids.forEach(id => { $(id).className = 'no'; }); finish(false, `Das LGS hat ${KIND_TEXT[task.kind]}.`); return; }
+    const right = vals.map((v, i) => Math.abs(v - task.sol[i][0]) < 1e-9);
+    ids.forEach((id, i) => { $(id).className = right[i] ? 'ok' : 'no'; });
+    finish(right.every(Boolean), verdict(['x₁', 'x₂', 'x₃'], right));
+    return;
+  }
+  if (state.kind === 'none') {
+    finish(task.kind === 'none', `Das LGS hat ${KIND_TEXT[task.kind]}.`);
+    return;
+  }
+  const ids = ['in-t1', 'in-t2'];
+  const vals = ids.map(id => parseLin($(id).value));
+  if (vals.some(v => v === null)) { feedback('info', '<strong>Bitte x₁ und x₂ in Abhängigkeit von t eintragen.</strong>'); return; }
+  if (vals.some(v => Number.isNaN(v))) { feedback('info', '<strong>Diese Eingabe kann ich nicht lesen.</strong><span>Schreibe zum Beispiel 2 - 3t, -t oder 4.</span>'); return; }
+  if (task.kind !== 'inf') { ids.forEach(id => { $(id).className = 'no'; }); finish(false, `Das LGS hat ${KIND_TEXT[task.kind]}.`); return; }
+  const right = vals.map((v, i) => Math.abs(v[0] - task.sol[i][0]) < 1e-9 && Math.abs(v[1] - task.sol[i][1]) < 1e-9);
+  ids.forEach((id, i) => { $(id).className = right[i] ? 'ok' : 'no'; });
+  finish(right.every(Boolean), verdict(['x₁', 'x₂'], right) + (right.every(Boolean) ? '' : ' Achte darauf, dass x₃ = t gesetzt wird.'));
+}
+
+document.querySelectorAll('#seg-kind button').forEach(b => b.addEventListener('click', () => setKind(b.dataset.v)));
+document.querySelectorAll('#seg-cases button').forEach(b => b.addEventListener('click', () => {
+  state.cases = b.dataset.v; setSeg('seg-cases', state.cases); store('cases', state.cases); newTask();
+}));
+document.querySelectorAll('#seg-level button').forEach(b => b.addEventListener('click', () => {
+  state.level = b.dataset.v; setSeg('seg-level', state.level); store('level', state.level); newTask();
+}));
+document.querySelectorAll('#seg-not button').forEach(b => b.addEventListener('click', () => {
+  state.notation = b.dataset.v; setSeg('seg-not', state.notation); store('notation', state.notation);
+  if (state.notation !== 'gemischt') { state.showMatrix = state.notation === 'matrix'; renderTaskSystem(); }
+}));
+$('answer-form').addEventListener('submit', check);
+$('btn-hint').addEventListener('click', showHint);
+$('btn-solution').addEventListener('click', () => {
+  if (!state.done) { state.done = true; state.all += 1; state.streak = 0; updateStats(); }
+  showSolution(true);
+});
+$('btn-next').addEventListener('click', () => { newTask(); });
+
+(function init() {
+  const lv = load('level'); if (lv && ['leicht', 'mittel', 'gemischt'].includes(lv)) state.level = lv;
+  const no = load('notation'); if (no && ['lgs', 'matrix', 'gemischt'].includes(no)) state.notation = no;
+  const ca = load('cases'); if (ca && ['all', 'one', 'none', 'inf'].includes(ca)) state.cases = ca;
+  setSeg('seg-cases', state.cases);
+  try { const st = JSON.parse(load('stats') || 'null'); if (st) { state.ok = st.ok | 0; state.all = st.all | 0; state.streak = st.streak | 0; } } catch (e) {}
+  setSeg('seg-level', state.level); setSeg('seg-not', state.notation);
+  updateStats();
+  newTask();
+})();
+</script>
+
+</body>
+</html>
